@@ -488,7 +488,7 @@ class AudioCueService {
 
       /// --- Cue Pilots: below
       if (pilotsBelow.isNotEmpty) {
-        _cuePilotsCustom(pilotsBelow, " belove you");
+        _cuePilotsCustom(pilotsBelow, " below you");
       }
 
       // Sort remaining pilots radialy
