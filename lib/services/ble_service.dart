@@ -27,6 +27,7 @@ StreamSubscription<List<ScanResult>>? _devicesListener;
 
 Timer? autoScan;
 bool scanning = false;
+bool alreadyRequestedPermission = false;
 
 BleDeviceHandler? getHandler({String? name, DeviceIdentifier? deviceId}) {
   if (name != null) {
@@ -51,7 +52,13 @@ void scan() async {
     return;
   }
   if (FlutterBluePlus.adapterStateNow == BluetoothAdapterState.unauthorized) {
-    Permission.bluetooth.request();
+    if (!alreadyRequestedPermission) {
+      alreadyRequestedPermission = true;
+      debugPrint("Requesting Bluetooth permission...");
+      await Permission.bluetooth.request();
+    } else {
+      debugPrint("Bluetooth permission already requested.");
+    }
     return;
   }
   debugPrint("BLE Scanning...");

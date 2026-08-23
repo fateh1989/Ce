@@ -641,6 +641,7 @@ class MyTelemetry with ChangeNotifier, WidgetsBindingObserver {
 
   /// Insert a fuel report into the sorted list.
   /// If the new report is within tolerance of another report, it will be replaced.
+  /// If the amount is null, the report will be removed.
   void insertFuelReport(DateTime time, double? amount, {Duration tolerance = const Duration(minutes: 5)}) {
     final overwriteIndex = findFuelReportIndex(time, tolerance: tolerance);
 

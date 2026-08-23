@@ -420,7 +420,10 @@ class FlightLog {
 
   /// Does this flight log contain this timestamp?
   bool containsTime(DateTime time) {
-    return time == startTime || time == endTime || (time.isAfter(startTime!) && time.isBefore(endTime!));
+    final t = time.millisecondsSinceEpoch;
+    final s = startTime?.millisecondsSinceEpoch ?? 0;
+    final e = endTime?.millisecondsSinceEpoch ?? 0;
+    return t >= s && t <= e;
   }
 
   /// Simple update of an existing fuel report
@@ -450,13 +453,19 @@ class FlightLog {
   /// Insert a fuel report into the sorted list.
   /// If the new report is within tolerance of another report, it will be replaced.
   void insertFuelReport(DateTime time, double? amount,
-      {Duration tolerance = const Duration(minutes: 5), useNewTime = true}) {
+      {Duration tolerance = const Duration(minutes: 2), useNewTime = true}) {
     final overwriteIndex = findFuelReportIndex(time, tolerance: tolerance);
 
     if (overwriteIndex != null) {
       if (amount != null) {
         // edit existing
-        fuelReports[overwriteIndex] = FuelReport(useNewTime ? time : fuelReports[overwriteIndex].time, amount);
+        if (useNewTime) {
+          // Remove this report and insert a new one so the ordering is correct
+          fuelReports.removeAt(overwriteIndex);
+          insertFuelReport(time, amount, useNewTime: false, tolerance: tolerance);
+        } else {
+          fuelReports[overwriteIndex] = FuelReport(fuelReports[overwriteIndex].time, amount);
+        }
       } else {
         // remove existing
         fuelReports.removeAt(overwriteIndex);
@@ -541,8 +550,8 @@ class FlightLog {
   /// Fuel reports will be interpolated in some cases
   FlightLog cropLog(Range<int> index) {
     final newRange = DateTimeRange(
-        start: DateTime.fromMillisecondsSinceEpoch(samples[index.start].time),
-        end: DateTime.fromMillisecondsSinceEpoch(samples[index.end].time));
+        start: DateTime.fromMillisecondsSinceEpoch(samples[max(0, index.start)].time),
+        end: DateTime.fromMillisecondsSinceEpoch(samples[min(samples.length - 1, index.end)].time));
 
     double interpTime(DateTime start, DateTime end, DateTime i) {
       final dur = end.millisecondsSinceEpoch - start.millisecondsSinceEpoch;
@@ -550,12 +559,13 @@ class FlightLog {
     }
 
     bool newContainsTime(DateTime time) {
-      return time == newRange.start ||
-          time == newRange.end ||
-          (time.isAfter(newRange.start) && time.isBefore(newRange.end));
+      final t = time.millisecondsSinceEpoch;
+      final s = newRange.start.millisecondsSinceEpoch;
+      final e = newRange.end.millisecondsSinceEpoch;
+      return t <= e && t >= s;
     }
 
-    final newFuelReports = fuelReports.toList();
+    final newFuelReports = fuelReports.where((each) => newContainsTime(each.time)).toList();
     for (int t = 0; t < fuelReports.length - 1; t++) {
       final first = fuelReports[t];
       final second = fuelReports[t + 1];
@@ -576,7 +586,7 @@ class FlightLog {
       }
     }
 
-    final newSamples = samples.sublist(index.start, index.end).toList();
+    final newSamples = samples.sublist(index.start, min(samples.length, index.end + 1)).toList();
 
     final newGForceSamples =
         gForceSamples.where((e) => e.time >= newSamples.first.time && e.time <= newSamples.last.time).toList();
@@ -695,6 +705,12 @@ class FlightLog {
       // --- Try loading fuel reports
       if (data.containsKey("fuelReports")) {
         _fuelReports = (data["fuelReports"] as List<dynamic>).map((e) => FuelReport.fromJson(e)).toList();
+        // Check ordering
+        for (int t = 0; t < _fuelReports.length - 1; t++) {
+          if (_fuelReports[t].time.isAfter(_fuelReports[t + 1].time)) {
+            error("Fuel reports out of order", attributes: {"filename": filename, "fuelReports": data["fuelReports"]});
+          }
+        }
       } else {
         _fuelReports = [];
       }

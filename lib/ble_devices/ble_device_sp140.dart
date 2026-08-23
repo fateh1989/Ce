@@ -287,7 +287,7 @@ class Sp140TelemetryCharacteristic {
             myTelemetry.insertFuelReport(
               now,
               telemetry.bmsSoc.toDouble(),
-              tolerance: const Duration(seconds: 30),
+              tolerance: const Duration(seconds: 10),
             );
           }
         }

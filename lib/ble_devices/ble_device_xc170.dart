@@ -104,7 +104,7 @@ class Xc170TelemetryCharacteristic {
     if (myTelemetry.inFlight) {
       if (fuel.log.isNotEmpty &&
           (myTelemetry.fuelReports.isEmpty ||
-              myTelemetry.fuelReports.last.time.isBefore(time.subtract(Duration(minutes: 5))))) {
+              myTelemetry.fuelReports.last.time.isBefore(time.subtract(Duration(minutes: 10))))) {
         myTelemetry.insertFuelReport(
           time,
           fuel.log.last.value,

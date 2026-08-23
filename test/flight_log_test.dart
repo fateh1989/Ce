@@ -116,6 +116,32 @@ void main() {
     final trimmed = log.cropLog(Range(0, 3));
 
     // Check samples
+    expect(trimmed.samples.length, 4);
+
+    // Check fuel
+    expect(trimmed.fuelReports.length, 3);
+    expect(trimmed.fuelReports.last.amount, 0.0);
+    expect(
+        trimmed.fuelReports.last.time, DateTime.fromMillisecondsSinceEpoch(const Duration(minutes: 20).inMilliseconds));
+  });
+
+  test("trim - end clean cut mid", () {
+    final log = FlightLog(samples: [
+      Geo(lat: 34, lng: 120, alt: 0.1, timestamp: const Duration().inMilliseconds),
+      Geo(lat: 34, lng: 120.1, alt: 0.2, spd: 15.3974637, timestamp: const Duration(minutes: 10).inMilliseconds),
+      Geo(lat: 34.05, lng: 120.15, alt: 0.25, spd: 23.0537096, timestamp: const Duration(minutes: 15).inMilliseconds),
+      Geo(lat: 34.1, lng: 120.2, alt: 0.3, spd: 24.0537096, timestamp: const Duration(minutes: 20).inMilliseconds),
+    ], fuelReports: [
+      FuelReport(DateTime.fromMillisecondsSinceEpoch(const Duration(minutes: 1).inMilliseconds), 10.0),
+      FuelReport(DateTime.fromMillisecondsSinceEpoch(const Duration(minutes: 15).inMilliseconds), 5.0),
+      FuelReport(DateTime.fromMillisecondsSinceEpoch(const Duration(minutes: 20).inMilliseconds), 0.0),
+    ]);
+
+    expect(log.fuelReports.length, 3);
+
+    final trimmed = log.cropLog(Range(0, 2));
+
+    // Check samples
     expect(trimmed.samples.length, 3);
 
     // Check fuel
@@ -139,7 +165,7 @@ void main() {
 
     expect(log.fuelReports.length, 3);
 
-    final trimmed = log.cropLog(Range(0, 3));
+    final trimmed = log.cropLog(Range(0, 2));
 
     // Check samples
     expect(trimmed.samples.length, 3);
