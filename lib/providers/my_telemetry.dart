@@ -562,7 +562,13 @@ class MyTelemetry with ChangeNotifier, WidgetsBindingObserver {
       landing = DateTime.fromMillisecondsSinceEpoch(recordGeo.last.time);
 
       // Insert new fuel report extrapolated down (if stats were available)
-      if (sumFuelStat != null && _fuelReports.isNotEmpty) {
+      if (bleDeviceSp140.device != null) {
+        debugPrint("SP140 is armed, Logging real fuel report.");
+        final soc = bleDeviceSp140.telemetry.charge.log.lastOrNull?.value.toDouble();
+        if (soc != null) {
+          insertFuelReport(landing!, soc);
+        }
+      } else if (sumFuelStat != null && _fuelReports.isNotEmpty) {
         insertFuelReport(landing!, sumFuelStat!.extrapolateToTime(_fuelReports.last, landing!));
       }
 
