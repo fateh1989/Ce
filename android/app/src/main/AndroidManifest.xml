@@ -25,7 +25,7 @@
     
     
     <application
-        android:label="CE"
+        android:label="مقاتل"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
