@@ -5,6 +5,7 @@ enum LanguageOverride {
   english,
   russian,
   hungarian,
+  arabic,
 }
 
 const Map<LanguageOverride, String> languageNames = {
@@ -12,6 +13,7 @@ const Map<LanguageOverride, String> languageNames = {
   LanguageOverride.english: "English",
   LanguageOverride.russian: "Русский",
   LanguageOverride.hungarian: "Magyar",
+  LanguageOverride.arabic: "العربية",
 };
 
 const Map<LanguageOverride, Locale?> supportedLanguages = {
@@ -19,4 +21,5 @@ const Map<LanguageOverride, Locale?> supportedLanguages = {
   LanguageOverride.english: Locale("en"),
   LanguageOverride.russian: Locale("ru"),
   LanguageOverride.hungarian: Locale("hu"),
+  LanguageOverride.arabic: Locale("ar"),
 };
