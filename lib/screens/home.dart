@@ -108,7 +108,7 @@ class _MyHomePageState extends State<MyHomePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Text("Ground Support",
+          Text("الدعم الأرضي",
               style: TextStyle(fontSize: 14, color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
           Card(
               color: Colors.grey.shade700,
@@ -117,7 +117,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text("Share Position"),
+                    const Text("مشاركة الموقع"),
                     ValueListenableBuilder(
                         valueListenable: settingsMgr.groundModeTelem.listenable,
                         builder: (context, value, _) {
@@ -219,31 +219,31 @@ class _MyHomePageState extends State<MyHomePage> {
                 }),
                 items: [
                   const BottomNavigationBarItem(
-                    label: "Menu",
+                    label: "القائمة",
                     icon: Icon(
                       Icons.more_vert,
                     ),
                   ),
                   const BottomNavigationBarItem(
-                    label: "Map",
+                    label: "الخريطة",
                     icon: Icon(
                       Icons.map,
                     ),
                   ),
                   const BottomNavigationBarItem(
-                    label: "Side",
+                    label: "الارتفاع",
                     icon: Icon(
                       Icons.area_chart,
                     ),
                   ),
                   const BottomNavigationBarItem(
-                    label: "Points",
+                    label: "النقاط",
                     icon: Icon(
                       Icons.pin_drop,
                     ),
                   ),
                   BottomNavigationBarItem(
-                    label: "Chat",
+                    label: "الدردشة",
                     icon: Stack(
                       children: [
                         const Icon(
