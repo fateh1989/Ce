@@ -152,7 +152,7 @@ flutter:
 
 
 patrol:
-  app_name: xcNav
+  app_name: مقاتل
   android:
     package_name: com.xcnav
   ios:
