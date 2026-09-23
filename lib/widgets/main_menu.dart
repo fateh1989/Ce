@@ -223,6 +223,15 @@ class _MainMenuState extends State<MainMenu> {
           onTap: () => {Navigator.popAndPushNamed(context, "/windy")},
         ),
 
+        // Lightweight EFIS page inspired by dedicated aviation PFDs.
+        ListTile(
+          minVerticalPadding: 10,
+          leading: const Icon(Icons.flight, size: 30),
+          title: Text("EFIS", style: Theme.of(context).textTheme.headlineSmall),
+          subtitle: const Text("الأفق الاصطناعي وعدادات الطيران"),
+          onTap: () => {Navigator.popAndPushNamed(context, "/efis")},
+        ),
+
         ListTile(
             minVerticalPadding: 10,
             onTap: () => {Navigator.popAndPushNamed(context, "/flightLogs")},
