@@ -41,9 +41,9 @@ String? _vfrVersion;
 String _getUrlTemplate(MapTileSrc src) {
   switch (src) {
     case MapTileSrc.sectional:
-      return 'http://vfrmap.com/${_vfrVersion ?? "20240711"}/tiles/vfrc/{z}/{y}/{x}.jpg';
+      return 'https://vfrmap.com/${_vfrVersion ?? "20240711"}/tiles/vfrc/{z}/{y}/{x}.jpg';
     case MapTileSrc.satellite:
-      return 'http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
     case MapTileSrc.topo:
       return "https://tile.opentopomap.org/{z}/{x}/{y}.png";
   }
