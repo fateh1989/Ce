@@ -1,4 +1,4 @@
-package com.xcnav
+package com.fateh.ce
 
 import io.flutter.embedding.android.FlutterActivity
 
