@@ -215,6 +215,14 @@ class _MainMenuState extends State<MainMenu> {
           onTap: () => {Navigator.popAndPushNamed(context, "/weather")},
         ),
 
+        // Official Windy page - kept separate from MUQATIL's own cached wind layer.
+        ListTile(
+          minVerticalPadding: 10,
+          leading: const Icon(Icons.air, size: 30),
+          title: Text("Windy الرسمي", style: Theme.of(context).textTheme.headlineSmall),
+          onTap: () => {Navigator.popAndPushNamed(context, "/windy")},
+        ),
+
         ListTile(
             minVerticalPadding: 10,
             onTap: () => {Navigator.popAndPushNamed(context, "/flightLogs")},
