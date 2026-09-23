@@ -43,6 +43,7 @@ import 'package:xcnav/screens/plans_viewer.dart';
 import 'package:xcnav/screens/group_details.dart';
 import 'package:xcnav/screens/about.dart';
 import 'package:xcnav/screens/weather_viewer.dart';
+import 'package:xcnav/screens/windy_viewer.dart';
 
 // Misc
 import 'package:xcnav/notifications.dart';
@@ -276,6 +277,7 @@ class XCNav extends StatelessWidget {
         "/planEditor": (context) => const PlanEditor(),
         "/groupDetails": (context) => const GroupDetails(),
         "/weather": (context) => const WeatherViewer(),
+        "/windy": (context) => const WindyViewer(),
         "/about": (context) => const About(),
         "/adsbHelp": (context) => const ADSBhelp(),
         "/checklist": (context) => const ChecklistViewer(),
