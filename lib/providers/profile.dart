@@ -9,7 +9,6 @@ import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
 
 import 'package:xcnav/models/gear.dart';
-import 'package:xcnav/secrets.dart';
 import 'package:xcnav/util.dart';
 
 class Profile with ChangeNotifier {
@@ -120,24 +119,10 @@ class Profile with ChangeNotifier {
   }
 
   Future pushAvatar() async {
-    if ("x$profileStoreUrl" == "xunset") {
-      debugPrint("Error while pushing avatar: secrets.dart profileStoreUrl is unset, ignoring");
-      return;
-    }
-
-    return http
-        .post(Uri.parse("https://$profileStoreUrl"),
-            headers: {"Content-Type": "application/json", "authorizationToken": profileStoreToken},
-            body: jsonEncode({"pilot_id": id?.toLowerCase(), "avatar": base64Encode(avatarRaw!)}))
-        .then((http.Response response) {
-      final int statusCode = response.statusCode;
-
-      if (statusCode < 200 || statusCode > 400) {
-        // throw Exception("Error while pushing avatar: $statusCode");
-        debugPrint("Error while pushing avatar: $statusCode");
-      }
-      return response.body;
-    });
+    // Remote avatar storage is disabled in the public CE build because the
+    // upstream private service credentials are not part of the repository.
+    debugPrint("Remote avatar upload disabled in public CE build");
+    return;
   }
 
   void updateID(String newID, String newSecretID) {
