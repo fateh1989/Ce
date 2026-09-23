@@ -20,6 +20,9 @@ class _EfisViewerState extends State<EfisViewer> {
   double _pitch = 0;
   double _roll = 0;
   double _gyroZ = 0;
+  double _fusedPitch = 0;
+  double _fusedRoll = 0;
+  DateTime? _lastGyroTime;
   double _magHeading = 0;
   double _pressureHpa = 0;
   double _gpsSpeedKmh = 0;
@@ -44,7 +47,16 @@ class _EfisViewerState extends State<EfisViewer> {
     _startGps();
     _gyro = gyroscopeEventStream().listen((e) {
       if (!mounted) return;
-      setState(() => _gyroZ = _gyroZ * .85 + e.z * .15);
+      final now = DateTime.now();
+      final dt = _lastGyroTime == null ? 0.0 : now.difference(_lastGyroTime!).inMicroseconds / 1000000.0;
+      _lastGyroTime = now;
+      if (dt <= 0 || dt > .2) return;
+      setState(() {
+        _gyroZ = _gyroZ * .85 + e.z * .15;
+        // Gyro carries fast attitude changes; accelerometer below slowly removes drift.
+        _fusedRoll += e.y * dt;
+        _fusedPitch += e.x * dt;
+      });
     });
     _mag = magnetometerEventStream().listen((e) {
       if (!mounted) return;
@@ -63,6 +75,14 @@ class _EfisViewerState extends State<EfisViewer> {
       setState(() {
         _roll = _roll * .86 + roll * .14;
         _pitch = _pitch * .86 + pitch.clamp(-math.pi / 3, math.pi / 3) * .14;
+        // Complementary filter: responsive gyro + long-term gravity reference.
+        if (_fusedRoll == 0 && _fusedPitch == 0) {
+          _fusedRoll = _roll;
+          _fusedPitch = _pitch;
+        } else {
+          _fusedRoll = .97 * _fusedRoll + .03 * _roll;
+          _fusedPitch = .97 * _fusedPitch + .03 * _pitch;
+        }
       });
     });
   }
@@ -114,7 +134,7 @@ class _EfisViewerState extends State<EfisViewer> {
   }
 
   void _zero() => setState(() {
-    _pitchZero = _pitch; _rollZero = _roll; _pitchTrim = 0; _rollTrim = 0;
+    _pitchZero = _fusedPitch; _rollZero = _fusedRoll; _pitchTrim = 0; _rollTrim = 0;
   });
 
   Future<void> _toggleRecord() async {
@@ -141,8 +161,8 @@ class _EfisViewerState extends State<EfisViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final pitch = _pitch - _pitchZero + _pitchTrim * math.pi / 180;
-    final roll = _roll - _rollZero + _rollTrim * math.pi / 180;
+    final pitch = _fusedPitch - _pitchZero + _pitchTrim * math.pi / 180;
+    final roll = _fusedRoll - _rollZero + _rollTrim * math.pi / 180;
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(child: Stack(fit: StackFit.expand, children: [
