@@ -32,6 +32,7 @@ class _EfisViewerState extends State<EfisViewer> {
   double? _lastAltitude;
   DateTime? _lastGpsTime;
   double _pitchZero = 0, _rollZero = 0, _pitchTrim = 0, _rollTrim = 0;
+  bool _attitudeReady = false;
   CameraController? _camera;
   StreamSubscription<AccelerometerEvent>? _imu;
   StreamSubscription<GyroscopeEvent>? _gyro;
@@ -80,9 +81,15 @@ class _EfisViewerState extends State<EfisViewer> {
         _roll = _roll * .86 + roll * .14;
         _pitch = _pitch * .86 + pitch.clamp(-math.pi / 3, math.pi / 3) * .14;
         // Complementary filter: responsive gyro + long-term gravity reference.
-        if (_fusedRoll == 0 && _fusedPitch == 0) {
+        if (!_attitudeReady) {
           _fusedRoll = _roll;
           _fusedPitch = _pitch;
+          // The phone's mounting angle (hand/selfie stick) becomes the initial
+          // visual reference, so the horizon starts centered instead of
+          // requiring the phone to point at the ceiling.
+          _pitchZero = _fusedPitch;
+          _rollZero = _fusedRoll;
+          _attitudeReady = true;
         } else {
           _fusedRoll = .97 * _fusedRoll + .03 * _roll;
           _fusedPitch = .97 * _fusedPitch + .03 * _pitch;
