@@ -13,7 +13,6 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:xcnav/models/geo.dart';
 import 'package:xcnav/models/waypoint.dart';
-import 'package:xcnav/secrets.dart';
 import 'package:xcnav/util.dart';
 
 class Pilot {
@@ -134,16 +133,8 @@ class Pilot {
   }
 
   Future _fetchS3asset(String pilotID) async {
-    Uri uri = Uri.https(
-        profileStoreUrl.split("/").first, profileStoreUrl.split("/").last, {"pilot_id": pilotID.toLowerCase()});
-    return http.get(uri, headers: {"authorizationToken": profileStoreToken}).then((http.Response response) {
-      final int statusCode = response.statusCode;
-
-      if (statusCode < 200 || statusCode > 400) {
-        throw Exception("Error while fetching avatar: $statusCode");
-      }
-      return json.decode(response.body);
-    });
+    // Remote avatar storage is disabled in the public CE build.
+    return null;
   }
 
   Polyline buildFlightTrace() {
