@@ -52,7 +52,6 @@ import 'package:xcnav/tts_service.dart';
 import 'package:xcnav/audio_cue_service.dart';
 import 'package:xcnav/map_service.dart';
 import 'package:xcnav/settings_service.dart';
-import 'package:xcnav/secrets.dart';
 import 'package:xcnav/util.dart';
 import 'package:xcnav/services/ble_service.dart' as ble_service;
 
@@ -74,7 +73,7 @@ void main() async {
     initCarbNeedles(prefs);
 
     final configuration = DatadogConfiguration(
-      clientToken: datadogToken,
+      clientToken: '',
       env: kDebugMode ? "debug" : "release",
       site: DatadogSite.us3,
 
@@ -84,7 +83,7 @@ void main() async {
       //   printLogsToConsole: true,
       // ),
       rumConfiguration: DatadogRumConfiguration(
-        applicationId: datadogRumAppId,
+        applicationId: '',
         detectLongTasks: true,
       ),
     );
