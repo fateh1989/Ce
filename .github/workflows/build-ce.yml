@@ -32,17 +32,45 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build unsigned CE APK
+      - name: Restore Android signing key
+        env:
+          CE_KEYSTORE_BASE64: ${{ secrets.CE_KEYSTORE_BASE64 }}
+          CE_STORE_PASSWORD: ${{ secrets.CE_STORE_PASSWORD }}
+          CE_KEY_PASSWORD: ${{ secrets.CE_KEY_PASSWORD }}
+          CE_KEY_ALIAS: ${{ secrets.CE_KEY_ALIAS }}
+        run: |
+          test -n "$CE_KEYSTORE_BASE64"
+          test -n "$CE_STORE_PASSWORD"
+          test -n "$CE_KEY_PASSWORD"
+          test -n "$CE_KEY_ALIAS"
+          printf '%s' "$CE_KEYSTORE_BASE64" | base64 --decode > android/app/ce-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$CE_STORE_PASSWORD
+          keyPassword=$CE_KEY_PASSWORD
+          keyAlias=$CE_KEY_ALIAS
+          storeFile=ce-release.jks
+          EOF
+
+      - name: Build signed MUQATIL APK
         run: flutter build apk --release --no-pub
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
 
       - name: Collect APK
         run: |
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/CE-unsigned.apk
+          cp build/app/outputs/flutter-apk/app-release.apk dist/MUQATIL.apk
 
-      - name: Upload CE APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: CE-unsigned-apk
-          path: dist/CE-unsigned.apk
+          name: MUQATIL-signed-apk
+          path: dist/MUQATIL.apk
           if-no-files-found: error
+
+      - name: Cleanup signing files
+        if: always()
+        run: rm -f android/app/ce-release.jks android/key.properties
