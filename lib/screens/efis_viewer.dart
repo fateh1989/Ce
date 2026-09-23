@@ -18,15 +18,35 @@ class EfisViewer extends StatefulWidget {
 class _EfisViewerState extends State<EfisViewer> {
   double _pitch = 0;
   double _roll = 0;
+  double _gyroZ = 0;
+  double _magHeading = 0;
+  double _pressureHpa = 0;
   double _pitchZero = 0, _rollZero = 0, _pitchTrim = 0, _rollTrim = 0;
   CameraController? _camera;
   StreamSubscription<AccelerometerEvent>? _imu;
+  StreamSubscription<GyroscopeEvent>? _gyro;
+  StreamSubscription<MagnetometerEvent>? _mag;
+  StreamSubscription<BarometerEvent>? _baro;
   bool _recording = false;
 
   @override
   void initState() {
     super.initState();
     _openCamera();
+    _gyro = gyroscopeEventStream().listen((e) {
+      if (!mounted) return;
+      setState(() => _gyroZ = _gyroZ * .85 + e.z * .15);
+    });
+    _mag = magnetometerEventStream().listen((e) {
+      if (!mounted) return;
+      var h = math.atan2(e.y, e.x) * 180 / math.pi;
+      if (h < 0) h += 360;
+      setState(() => _magHeading = _magHeading * .88 + h * .12);
+    });
+    _baro = barometerEventStream().listen((e) {
+      if (!mounted) return;
+      setState(() => _pressureHpa = _pressureHpa == 0 ? e.pressure : _pressureHpa * .9 + e.pressure * .1);
+    });
     _imu = accelerometerEventStream().listen((event) {
       if (!mounted) return;
       final roll = math.atan2(event.x, math.sqrt(event.y * event.y + event.z * event.z));
@@ -70,6 +90,9 @@ class _EfisViewerState extends State<EfisViewer> {
   @override
   void dispose() {
     _imu?.cancel();
+    _gyro?.cancel();
+    _mag?.cancel();
+    _baro?.cancel();
     _camera?.dispose();
     super.dispose();
   }
@@ -86,6 +109,12 @@ class _EfisViewerState extends State<EfisViewer> {
         else
           const Center(child: CircularProgressIndicator()),
         CustomPaint(painter: _PfdPainter(pitch: pitch, roll: roll, transparent: true)),
+        Positioned(top: 82, left: 0, right: 0, child: Center(child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: Colors.greenAccent), borderRadius: BorderRadius.circular(6)),
+          child: Text('HDG ${_magHeading.toStringAsFixed(0).padLeft(3, '0')}°   BARO ${_pressureHpa == 0 ? '--' : _pressureHpa.toStringAsFixed(1)} hPa   GYRO ${_gyroZ.toStringAsFixed(2)}',
+            style: const TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+        ))),
         Positioned(top: 12, left: 12, child: IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back))),
         Positioned(top: 12, right: 12, child: FilledButton.icon(
           style: FilledButton.styleFrom(backgroundColor: _recording ? Colors.red : Colors.black54),
