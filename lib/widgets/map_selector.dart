@@ -117,7 +117,7 @@ class MapSelector extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text("ADSB-in"),
+                              const Text("الطائرات الحية"),
                               (Provider.of<ADSB>(context).lastHeartbeat >
                                       DateTime.now().millisecondsSinceEpoch - 1000 * 60)
                                   ? Text.rich(TextSpan(children: [
@@ -127,7 +127,7 @@ class MapSelector extends StatelessWidget {
                                             Icons.check,
                                             color: Colors.green,
                                           )),
-                                      TextSpan(text: "  ${"Connected".tr()}")
+                                      const TextSpan(text: "  متصلة")
                                     ]))
                                   : Text.rich(TextSpan(children: [
                                       const WidgetSpan(
@@ -136,7 +136,7 @@ class MapSelector extends StatelessWidget {
                                             Icons.link_off,
                                             color: Colors.amber,
                                           )),
-                                      TextSpan(text: "  ${"No Data".tr()}"),
+                                      const TextSpan(text: "  بانتظار البيانات"),
                                       WidgetSpan(
                                           alignment: PlaceholderAlignment.middle,
                                           child: Padding(
