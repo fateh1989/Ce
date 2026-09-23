@@ -5,8 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_map_tile_caching/flutter_map_tile_caching.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:xcnav/datadog.dart';
 import 'package:xcnav/dem_service.dart';
@@ -15,8 +13,6 @@ enum MapTileSrc {
   topo,
   sectional,
   satellite,
-  // airspace,
-  // airports,
 }
 
 bool mapServiceIsInit = false;
@@ -35,13 +31,11 @@ TileProvider? _makeTileProvider(String instanceName) {
 
 final Map<MapTileSrc, TileLayer> _tileLayersCache = {};
 
-bool _fetchingVfrVersion = false;
-String? _vfrVersion;
-
 String _getUrlTemplate(MapTileSrc src) {
   switch (src) {
     case MapTileSrc.sectional:
-      return 'https://vfrmap.com/${_vfrVersion ?? "20240711"}/tiles/vfrc/{z}/{y}/{x}.jpg';
+      // Global road/basemap replacement for the former US-only VFRMap layer.
+      return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     case MapTileSrc.satellite:
       return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
     case MapTileSrc.topo:
@@ -56,13 +50,12 @@ TileLayer _buildMapTileLayer(MapTileSrc tileSrc) {
       return TileLayer(
         urlTemplate: _getUrlTemplate(tileSrc),
         tileProvider: NetworkTileProvider(),
-        maxNativeZoom: 11,
-        tms: true,
+        userAgentPackageName: 'com.fateh.ce',
+        maxNativeZoom: 19,
         panBuffer: 0,
         evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         errorTileCallback: (tile, error, stackTrace) {
-          fetchVFRversion();
-          debugPrint("$tileName: error: ${tile.imageInfo?.debugLabel ?? "?"}, $error, $stackTrace");
+          debugPrint("$tileName: error: $tile, $error, $stackTrace");
         },
       );
     case MapTileSrc.satellite:
@@ -77,46 +70,13 @@ TileLayer _buildMapTileLayer(MapTileSrc tileSrc) {
           debugPrint("$tileName: error: $tile, $error, $stackTrace");
         },
       );
-    // https://docs.openaip.net/?urls.primaryName=Tiles%20API
-    // case MapTileSrc.airspace:
-    //   return TileLayer(
-    //     urlTemplate: 'https://api.tiles.openaip.net/api/data/airspaces/{z}/{x}/{y}.png?apiKey={apiKey}',
-    //     tileProvider: NetworkTileProvider(),
-    //     backgroundColor: Colors.transparent,
-    //     // maxZoom: 11,
-    //     maxNativeZoom: 11,
-    //     minZoom: 7,
-    //     additionalOptions: const {"apiKey": aipClientToken},
-    //     evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
-    //     errorTileCallback: (tile, error, stackTrace) {
-    //       debugPrint("$tileName: error: $tile, $error, $stackTrace");
-    //     },
-    //   );
-    // case MapTileSrc.airports:
-    //   return TileLayer(
-    //     urlTemplate: 'https://api.tiles.openaip.net/api/data/airports/{z}/{x}/{y}.png?apiKey={apiKey}',
-    //     tileProvider: _makeTileProvider(tileName),
-    //     backgroundColor: Colors.transparent,
-    //     maxZoom: 11,
-    //     minZoom: 9,
-    //     additionalOptions: const {"apiKey": aipClientToken},
-    //     evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
-    //     errorTileCallback: (tile, error, stackTrace) {
-    //       debugPrint("$tileName: error: $tile, $error, $stackTrace");
-    //     },
-    //   );
     case MapTileSrc.topo:
       debugPrint("------ make tile layer ----");
       return TileLayer(
         urlTemplate: _getUrlTemplate(tileSrc),
-        // urlTemplate: "https://tile.tracestrack.com/topo__/{z}/{x}/{y}.png?key={apiKey}",
-        // fallbackUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-        // urlTemplate: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png", // Use this line to test seeing the elevation map
         tileProvider: NetworkTileProvider(),
         maxNativeZoom: 16,
         panBuffer: 0,
-        // minZoom: 2,
-        // additionalOptions: const {"apiKey": "d9344714a8fbf28773ce4c955ea8adfb"},
         evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
         errorTileCallback: (tile, error, stackTrace) {
           debugPrint("$tileName: error: $tile, $error, $stackTrace");
@@ -151,52 +111,9 @@ final Map<MapTileSrc, Image> mapTileThumbnails = {
     filterQuality: FilterQuality.high,
     fit: BoxFit.cover,
   ),
-  // MapTileSrc.airspace: Image.asset(
-  //   "assets/images/sectional.png",
-  //   filterQuality: FilterQuality.high,
-  //   fit: BoxFit.cover,
-  // ),
-  // MapTileSrc.airports: Image.asset(
-  //   "assets/images/sectional.png",
-  //   filterQuality: FilterQuality.high,
-  //   fit: BoxFit.cover,
-  // )
 };
 
-Future fetchVFRversion() async {
-  if (!_fetchingVfrVersion) {
-    _fetchingVfrVersion = true;
-    final resp = await http.get(Uri.parse("https://vfrmap.com/js/map.js?1"));
-    _fetchingVfrVersion = false;
-
-    if (resp.statusCode == 200) {
-      final dateMatch = RegExp(r"var [\w]{1,2}='(20[\d]{6})';").firstMatch(resp.body);
-      if (dateMatch != null) {
-        final date = dateMatch.group(1);
-        if (date != null) {
-          _vfrVersion = date;
-          debugPrint("Fetched VFR map version: $_vfrVersion");
-          SharedPreferences.getInstance().then((value) => value.setString("vfrVersion", date));
-        }
-      }
-    }
-  }
-}
-
-Future initVFRversion() async {
-  final prefs = await SharedPreferences.getInstance();
-  final cached = prefs.getString("vfrVersion");
-  if (cached != null) {
-    _vfrVersion = cached;
-    debugPrint("Loaded VFR map version: $_vfrVersion");
-  } else {
-    fetchVFRversion();
-  }
-}
-
 Future initMapCache() async {
-  await initVFRversion();
-
   await FMTCObjectBoxBackend().initialise(rootDirectory: (await getApplicationDocumentsDirectory()).path);
 
   for (final tileSrc in mapTileThumbnails.keys) {
@@ -204,7 +121,6 @@ Future initMapCache() async {
     final store = FMTCStore(tileName);
     await store.manage.create();
     await store.metadata.set(key: 'sourceURL', value: _getUrlTemplate(tileSrc));
-    // Do a regular purge of old tiles
     store.manage.removeTilesOlderThan(expiry: clock.now().subtract(const Duration(days: 16)));
   }
 
@@ -226,12 +142,10 @@ Future<String> getMapTileCacheSize() async {
 }
 
 void emptyMapTileCache() {
-  // Empty elevation map cache
   const demStore = FMTCStore("dem");
   debugPrint("Clear Map Cache: dem");
   demStore.manage.reset();
 
-  // Empty standard map caches
   for (final tileSrc in mapTileThumbnails.keys) {
     final tileName = tileSrc.toString().split(".").last;
     final store = FMTCStore(tileName);
