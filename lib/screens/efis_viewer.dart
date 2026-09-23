@@ -39,6 +39,10 @@ class _EfisViewerState extends State<EfisViewer> {
   StreamSubscription<BarometerEvent>? _baro;
   StreamSubscription<Position>? _gps;
   bool _recording = false;
+  double _zoom = 1.0;
+  double _minZoom = 1.0;
+  double _maxZoom = 1.0;
+  double _zoomStart = 1.0;
 
   @override
   void initState() {
@@ -127,7 +131,15 @@ class _EfisViewerState extends State<EfisViewer> {
       final controller = CameraController(selected, ResolutionPreset.high, enableAudio: false);
       await controller.initialize();
       if (!mounted) { await controller.dispose(); return; }
-      setState(() => _camera = controller);
+      final minZoom = await controller.getMinZoomLevel();
+      final maxZoom = await controller.getMaxZoomLevel();
+      if (!mounted) { await controller.dispose(); return; }
+      setState(() {
+        _camera = controller;
+        _minZoom = minZoom;
+        _maxZoom = maxZoom;
+        _zoom = minZoom;
+      });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('الكاميرا: ' + e.toString())));
     }
@@ -141,8 +153,18 @@ class _EfisViewerState extends State<EfisViewer> {
     final c = _camera;
     if (c == null || !c.value.isInitialized) return;
     try {
-      if (_recording) { await c.stopVideoRecording(); } else { await c.startVideoRecording(); }
-      if (mounted) setState(() => _recording = !_recording);
+      if (_recording) {
+        final file = await c.stopVideoRecording();
+        if (mounted) {
+          setState(() => _recording = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تم حفظ الفيديو: ${file.path}'), duration: const Duration(seconds: 6)),
+          );
+        }
+      } else {
+        await c.startVideoRecording();
+        if (mounted) setState(() => _recording = true);
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('التسجيل: ' + e.toString())));
     }
@@ -167,7 +189,18 @@ class _EfisViewerState extends State<EfisViewer> {
       backgroundColor: Colors.black,
       body: SafeArea(child: Stack(fit: StackFit.expand, children: [
         if (_camera?.value.isInitialized == true)
-          CameraPreview(_camera!)
+          GestureDetector(
+            onScaleStart: (_) => _zoomStart = _zoom,
+            onScaleUpdate: (d) {
+              final controller = _camera;
+              if (controller == null || d.pointerCount < 2) return;
+              final next = (_zoomStart * d.scale).clamp(_minZoom, _maxZoom);
+              _zoom = next;
+              controller.setZoomLevel(next);
+              if (mounted) setState(() {});
+            },
+            child: CameraPreview(_camera!),
+          )
         else
           const Center(child: CircularProgressIndicator()),
         CustomPaint(painter: _PfdPainter(pitch: pitch, roll: roll, transparent: true, speedKmh: _gpsSpeedKmh, altitudeM: _gpsAltitude, headingDeg: _gpsSpeedKmh > 4 ? _gpsHeading : _magHeading, verticalSpeed: _verticalSpeed)),
@@ -177,6 +210,11 @@ class _EfisViewerState extends State<EfisViewer> {
           child: Text('HDG ${_magHeading.toStringAsFixed(0).padLeft(3, '0')}°   BARO ${_pressureHpa == 0 ? '--' : _pressureHpa.toStringAsFixed(1)} hPa   GYRO ${_gyroZ.toStringAsFixed(2)}',
             style: const TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
         ))),
+        Positioned(top: 132, right: 12, child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: Colors.greenAccent), borderRadius: BorderRadius.circular(6)),
+          child: Text('${_zoom.toStringAsFixed(1)}x', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+        )),
         Positioned(top: 12, left: 12, child: IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back))),
         Positioned(top: 12, right: 12, child: FilledButton.icon(
           style: FilledButton.styleFrom(backgroundColor: _recording ? Colors.red : Colors.black54),
