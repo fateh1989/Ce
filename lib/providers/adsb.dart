@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:usb_serial/transaction.dart';
@@ -62,6 +64,13 @@ class ADSB with ChangeNotifier {
 
   bool portListening = false;
   bool _enabled = false;
+
+  // Internet ADS-B. Keep the existing local USB/GDL90 receiver support as a
+  // fallback, but allow live traffic with no extra hardware.
+  DateTime _lastInternetFetch = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _internetFetchInProgress = false;
+  static const Duration _internetFetchInterval = Duration(seconds: 10);
+  static const double _internetRadiusNm = 100;
 
   UsbPort? _usbPort;
 
@@ -222,6 +231,102 @@ class ADSB with ChangeNotifier {
     lastHeartbeat = DateTime.now().millisecondsSinceEpoch;
   }
 
+  GAtype _internetAircraftType(Map<String, dynamic> ac) {
+    final category = (ac["category"] ?? "").toString().toUpperCase();
+    final desc = (ac["desc"] ?? "").toString().toLowerCase();
+    if (category.startsWith("A7") || desc.contains("helicopter")) return GAtype.heli;
+    if (desc.contains("heavy") || desc.contains("large")) return GAtype.large;
+    if (category.startsWith("A1") || category.startsWith("A2")) return GAtype.small;
+    return GAtype.unknown;
+  }
+
+  double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? "");
+  }
+
+  Future<Map<String, dynamic>?> _requestInternetSource(String base, LatLng center) async {
+    final url = Uri.parse(
+        "$base/v2/point/${center.latitude.toStringAsFixed(5)}/${center.longitude.toStringAsFixed(5)}/$_internetRadiusNm");
+    final response = await http.get(url, headers: const {
+      "User-Agent": "MUQATIL/1.0 live-air-traffic",
+      "Accept": "application/json",
+    }).timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200) {
+      throw HttpException("ADS-B HTTP ${response.statusCode}");
+    }
+    final decoded = jsonDecode(response.body);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  Future<void> _fetchInternetTraffic(LatLng center) async {
+    if (!_enabled || _internetFetchInProgress) return;
+    final now = DateTime.now();
+    if (now.difference(_lastInternetFetch) < _internetFetchInterval) return;
+
+    _lastInternetFetch = now;
+    _internetFetchInProgress = true;
+    try {
+      Map<String, dynamic>? data;
+      // Primary source, then compatible open-data fallback.
+      try {
+        data = await _requestInternetSource("https://api.airplanes.live", center);
+      } catch (primaryError) {
+        debugPrint("Airplanes.live ADS-B error: $primaryError; trying ADSB.lol");
+        data = await _requestInternetSource("https://api.adsb.lol", center);
+      }
+
+      final aircraft = data?["ac"];
+      if (aircraft is! List) return;
+
+      final fetchedAt = DateTime.now().millisecondsSinceEpoch;
+      final internetPlanes = <String, GA>{};
+      for (final raw in aircraft) {
+        if (raw is! Map) continue;
+        final ac = Map<String, dynamic>.from(raw);
+        final lat = _asDouble(ac["lat"]);
+        final lon = _asDouble(ac["lon"]);
+        if (lat == null || lon == null) continue;
+
+        final hex = (ac["hex"] ?? "").toString().trim();
+        final flight = (ac["flight"] ?? "").toString().trim();
+        final id = flight.isNotEmpty ? flight : hex;
+        if (id.isEmpty || settingsMgr.adsbFilters.value.contains(id)) continue;
+
+        // readsb fields: altitude feet, groundspeed knots, track degrees.
+        final altFeet = _asDouble(ac["alt_geom"]) ?? _asDouble(ac["alt_baro"]) ?? 0;
+        final speedKnots = _asDouble(ac["gs"]) ?? 0;
+        final heading = _asDouble(ac["track"]) ??
+            _asDouble(ac["true_heading"]) ??
+            _asDouble(ac["mag_heading"]) ??
+            0;
+        final seen = _asDouble(ac["seen_pos"]) ?? _asDouble(ac["seen"]) ?? 0;
+        final timestamp = fetchedAt - (seen * 1000).round();
+
+        internetPlanes[id] = GA(
+          id,
+          LatLng(lat, lon),
+          altFeet * 0.3048,
+          speedKnots * 0.514444,
+          heading,
+          _internetAircraftType(ac),
+          timestamp,
+        );
+      }
+
+      // Preserve fresh locally received targets and merge internet targets.
+      cleanupOldEntries();
+      planes.addAll(internetPlanes);
+      heartbeat();
+      notifyListeners();
+      debugPrint("Internet ADS-B: ${internetPlanes.length} aircraft");
+    } catch (err, trace) {
+      debugPrint("Internet ADS-B failed: $err\n$trace");
+    } finally {
+      _internetFetchInProgress = false;
+    }
+  }
+
   void cleanupOldEntries() {
     final thresh = DateTime.now().millisecondsSinceEpoch - 1000 * 12;
     for (GA each in planes.values.toList()) {
@@ -321,6 +426,9 @@ class ADSB with ChangeNotifier {
   /// Trigger update refresh
   /// Provide observer geo to calculate warnings
   void refresh(Geo observer, bool inFlight) {
+    if (_enabled) {
+      _fetchInternetTraffic(observer.latlng);
+    }
     if (planes.isNotEmpty) {
       cleanupOldEntries();
       if (_enabled && inFlight) checkProximity(observer);
