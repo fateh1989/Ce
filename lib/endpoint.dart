@@ -1,5 +1,4 @@
 import 'package:latlong2/latlong.dart';
-import 'package:xcnav/secrets.dart';
 
 class Endpoint {
   String apiUrl;
@@ -13,14 +12,19 @@ LatLng latlngAtLoading = const LatLng(0, 0);
 Endpoint? serverEndpoint;
 String localeZone = "unset";
 
+// Public CE build: upstream deployment credentials are intentionally absent.
+// Keep a disabled endpoint so the app can compile without private secrets.
+final Endpoint reflectorNorthAmerica =
+    Endpoint(apiUrl: "unset", token: "", cert: "");
+
 void selectEndpoint(LatLng latlng) {
   latlngAtLoading = latlng;
-  if (latlngAtLoading.longitude > -180 && latlngAtLoading.longitude < -50 && latlngAtLoading.latitude > 13) {
+  if (latlngAtLoading.longitude > -180 &&
+      latlngAtLoading.longitude < -50 &&
+      latlngAtLoading.latitude > 13) {
     serverEndpoint = reflectorNorthAmerica;
     localeZone = "NA";
   } else {
-    // Default
     serverEndpoint = reflectorNorthAmerica;
-    // localeZone = "NA";
   }
 }
