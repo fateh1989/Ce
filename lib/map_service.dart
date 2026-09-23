@@ -55,7 +55,7 @@ TileLayer _buildMapTileLayer(MapTileSrc tileSrc) {
     case MapTileSrc.sectional:
       return TileLayer(
         urlTemplate: _getUrlTemplate(tileSrc),
-        tileProvider: _makeTileProvider(tileName),
+        tileProvider: NetworkTileProvider(),
         maxNativeZoom: 11,
         tms: true,
         panBuffer: 0,
@@ -68,7 +68,7 @@ TileLayer _buildMapTileLayer(MapTileSrc tileSrc) {
     case MapTileSrc.satellite:
       return TileLayer(
         urlTemplate: _getUrlTemplate(tileSrc),
-        tileProvider: _makeTileProvider(tileName),
+        tileProvider: NetworkTileProvider(),
         maxNativeZoom: 19,
         minZoom: 2,
         panBuffer: 0,
@@ -81,7 +81,7 @@ TileLayer _buildMapTileLayer(MapTileSrc tileSrc) {
     // case MapTileSrc.airspace:
     //   return TileLayer(
     //     urlTemplate: 'https://api.tiles.openaip.net/api/data/airspaces/{z}/{x}/{y}.png?apiKey={apiKey}',
-    //     tileProvider: _makeTileProvider(tileName),
+    //     tileProvider: NetworkTileProvider(),
     //     backgroundColor: Colors.transparent,
     //     // maxZoom: 11,
     //     maxNativeZoom: 11,
