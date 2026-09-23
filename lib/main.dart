@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:datadog_flutter_plugin/datadog_flutter_plugin.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -72,52 +71,10 @@ void main() async {
     settingsMgr = SettingsMgr(prefs);
     initCarbNeedles(prefs);
 
-    final configuration = DatadogConfiguration(
-      clientToken: '',
-      env: kDebugMode ? "debug" : "release",
-      site: DatadogSite.us3,
-
-      nativeCrashReportEnabled: true,
-      // loggingConfiguration: DatadogLoggingConfiguration(
-      //   loggerName: "xcNav: ${version.version}  -  ( build ${version.buildNumber} )",
-      //   printLogsToConsole: true,
-      // ),
-      rumConfiguration: DatadogRumConfiguration(
-        applicationId: '',
-        detectLongTasks: true,
-      ),
-    );
-
-    await DatadogSdk.instance
-        .initialize(configuration, settingsMgr.rumOptOut.value ? TrackingConsent.notGranted : TrackingConsent.granted);
-
-    final ddsdk = DatadogSdk.instance;
-    // ddsdk.sdkVerbosity = Verbosity.verbose;
-
-    ddLogger = ddsdk.logs?.createLogger(DatadogLoggerConfiguration(
-      name: "xcNav: ${version.version}  -  ( build ${version.buildNumber} )",
-    ));
-
-    // Set up an anonymous ID for logging and usage statistics.
-    // This ID will be uncorrelated to any ID on the server and is therefore anonymous.
-    // It will be saved, however, so individual clients can be distinguished.
-    if (settingsMgr.datadogSdkId.value.isEmpty) {
-      final random = Random.secure();
-      final values = List<int>.generate(10, (i) => random.nextInt(255));
-      settingsMgr.datadogSdkId.value = base64UrlEncode(values);
-    }
-    ddsdk.setUserInfo(id: settingsMgr.datadogSdkId.value);
-
     FlutterError.onError = (FlutterErrorDetails details) {
       error(details.toString(), errorStackTrace: details.stack);
-      ddsdk.rum?.handleFlutterError(details);
       FlutterError.presentError(details);
     };
-
-    // Let datadog know we will not be participating.
-    if (settingsMgr.rumOptOut.value) {
-      info("rum opt-out");
-    }
 
     // Load last known LatLng
     final raw = prefs.getString("lastKnownLatLng");
@@ -190,8 +147,7 @@ void main() async {
                 onFocusLost: () => {setFocus(false)},
                 child: const XCNav()))));
   }, (e, s) {
-    DatadogSdk.instance.rum?.addErrorInfo(e.toString(), RumErrorSource.source, stackTrace: s);
-    throw e;
+    debugPrint("Uncaught startup error: $e\n$s");
   });
 }
 
@@ -237,8 +193,7 @@ class XCNav extends StatelessWidget {
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,
-      navigatorObservers:
-          settingsMgr.rumOptOut.value ? [] : [DatadogNavigationObserver(datadogSdk: DatadogSdk.instance)],
+      navigatorObservers: const [],
       title: 'مقاتل',
       debugShowCheckedModeBanner: false,
       darkTheme: ThemeData(
