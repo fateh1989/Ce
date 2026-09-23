@@ -1,6 +1,11 @@
 secrets.dart
 test_bundle.dart
 
+# Signing files - never commit
+android/key.properties
+*.jks
+*.keystore
+
 # Miscellaneous
 *.class
 *.log
