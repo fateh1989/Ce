@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:geolocator/geolocator.dart';
 
 /// Lightweight EFIS/PFD for MUQATIL.
 /// Uses the phone IMU for the artificial horizon. Navigation values will be
@@ -21,18 +22,26 @@ class _EfisViewerState extends State<EfisViewer> {
   double _gyroZ = 0;
   double _magHeading = 0;
   double _pressureHpa = 0;
+  double _gpsSpeedKmh = 0;
+  double _gpsAltitude = 0;
+  double _gpsHeading = 0;
+  double _verticalSpeed = 0;
+  double? _lastAltitude;
+  DateTime? _lastGpsTime;
   double _pitchZero = 0, _rollZero = 0, _pitchTrim = 0, _rollTrim = 0;
   CameraController? _camera;
   StreamSubscription<AccelerometerEvent>? _imu;
   StreamSubscription<GyroscopeEvent>? _gyro;
   StreamSubscription<MagnetometerEvent>? _mag;
   StreamSubscription<BarometerEvent>? _baro;
+  StreamSubscription<Position>? _gps;
   bool _recording = false;
 
   @override
   void initState() {
     super.initState();
     _openCamera();
+    _startGps();
     _gyro = gyroscopeEventStream().listen((e) {
       if (!mounted) return;
       setState(() => _gyroZ = _gyroZ * .85 + e.z * .15);
@@ -56,6 +65,38 @@ class _EfisViewerState extends State<EfisViewer> {
         _pitch = _pitch * .86 + pitch.clamp(-math.pi / 3, math.pi / 3) * .14;
       });
     });
+  }
+
+  Future<void> _startGps() async {
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
+      _gps = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.bestForNavigation, distanceFilter: 0),
+      ).listen((p) {
+        if (!mounted) return;
+        final now = DateTime.now();
+        var vs = _verticalSpeed;
+        if (_lastAltitude != null && _lastGpsTime != null) {
+          final dt = now.difference(_lastGpsTime!).inMilliseconds / 1000.0;
+          if (dt > .25 && dt < 10) {
+            final raw = (p.altitude - _lastAltitude!) / dt;
+            vs = vs * .82 + raw.clamp(-20.0, 20.0) * .18;
+          }
+        }
+        _lastAltitude = p.altitude;
+        _lastGpsTime = now;
+        setState(() {
+          _gpsSpeedKmh = p.speed.isFinite ? math.max(0, p.speed * 3.6) : 0;
+          _gpsAltitude = p.altitude;
+          if (p.heading.isFinite && p.speed > 1.0) _gpsHeading = p.heading;
+          _verticalSpeed = vs;
+        });
+      });
+    } catch (_) {}
   }
 
   Future<void> _openCamera() async {
@@ -93,6 +134,7 @@ class _EfisViewerState extends State<EfisViewer> {
     _gyro?.cancel();
     _mag?.cancel();
     _baro?.cancel();
+    _gps?.cancel();
     _camera?.dispose();
     super.dispose();
   }
@@ -108,7 +150,7 @@ class _EfisViewerState extends State<EfisViewer> {
           CameraPreview(_camera!)
         else
           const Center(child: CircularProgressIndicator()),
-        CustomPaint(painter: _PfdPainter(pitch: pitch, roll: roll, transparent: true)),
+        CustomPaint(painter: _PfdPainter(pitch: pitch, roll: roll, transparent: true, speedKmh: _gpsSpeedKmh, altitudeM: _gpsAltitude, headingDeg: _gpsSpeedKmh > 4 ? _gpsHeading : _magHeading, verticalSpeed: _verticalSpeed)),
         Positioned(top: 82, left: 0, right: 0, child: Center(child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(color: Colors.black54, border: Border.all(color: Colors.greenAccent), borderRadius: BorderRadius.circular(6)),
@@ -156,7 +198,8 @@ class _PfdPainter extends CustomPainter {
   final double pitch;
   final double roll;
   final bool transparent;
-  _PfdPainter({required this.pitch, required this.roll, this.transparent = false});
+  final double speedKmh, altitudeM, headingDeg, verticalSpeed;
+  _PfdPainter({required this.pitch, required this.roll, this.transparent = false, this.speedKmh = 0, this.altitudeM = 0, this.headingDeg = 0, this.verticalSpeed = 0});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -206,9 +249,10 @@ class _PfdPainter extends CustomPainter {
     final r = math.min(size.width * .28, 115.0);
     canvas.drawArc(Rect.fromCircle(center: center, radius: r), math.pi * 1.15, math.pi * .7, false, border);
 
-    _box(canvas, const Offset(10, 18), 'SPD', '--', 'km/h');
-    _box(canvas, Offset(size.width - 92, 18), 'ALT', '--', 'm');
-    _box(canvas, Offset(size.width / 2 - 42, size.height - 72), 'HDG', '---', '°');
+    _box(canvas, const Offset(10, 18), 'SPD', speedKmh.toStringAsFixed(0), 'km/h');
+    _box(canvas, Offset(size.width - 92, 18), 'ALT', altitudeM.toStringAsFixed(0), 'm');
+    _box(canvas, Offset(size.width / 2 - 42, size.height - 72), 'HDG', headingDeg.toStringAsFixed(0).padLeft(3, '0'), '°');
+    _box(canvas, Offset(size.width - 92, size.height / 2 - 28), 'V/S', verticalSpeed.toStringAsFixed(1), 'm/s');
   }
 
   void _box(Canvas canvas, Offset p, String title, String value, String unit) {
@@ -222,5 +266,5 @@ class _PfdPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _PfdPainter oldDelegate) => oldDelegate.pitch != pitch || oldDelegate.roll != roll;
+  bool shouldRepaint(covariant _PfdPainter oldDelegate) => oldDelegate.pitch != pitch || oldDelegate.roll != roll || oldDelegate.speedKmh != speedKmh || oldDelegate.altitudeM != altitudeM || oldDelegate.headingDeg != headingDeg || oldDelegate.verticalSpeed != verticalSpeed;
 }
