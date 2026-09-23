@@ -84,6 +84,15 @@ class Client with ChangeNotifier {
   void connect() async {
     reconnectionWait += 1;
 
+    // Public builds may intentionally have no backend configured.
+    // Do not enter a reconnect loop against the placeholder endpoint.
+    if (serverEndpoint != null && serverEndpoint!.apiUrl == "unset") {
+      debugPrint("Backend is not configured; network client disabled.");
+      _state = ClientState.disconnected;
+      notifyListeners();
+      return;
+    }
+
     if (serverEndpoint == null) {
       debugPrint("Waiting for server to be selected.");
       state = ClientState.disconnected;
