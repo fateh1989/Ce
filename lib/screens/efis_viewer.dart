@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:sensors_plus/sensors_plus.dart';
 
 /// Lightweight EFIS/PFD for MUQATIL.
@@ -16,66 +18,116 @@ class EfisViewer extends StatefulWidget {
 class _EfisViewerState extends State<EfisViewer> {
   double _pitch = 0;
   double _roll = 0;
+  double _pitchZero = 0, _rollZero = 0, _pitchTrim = 0, _rollTrim = 0;
+  CameraController? _camera;
+  StreamSubscription<AccelerometerEvent>? _imu;
+  bool _recording = false;
 
   @override
   void initState() {
     super.initState();
-    accelerometerEventStream().listen((event) {
+    _openCamera();
+    _imu = accelerometerEventStream().listen((event) {
       if (!mounted) return;
       final roll = math.atan2(event.x, math.sqrt(event.y * event.y + event.z * event.z));
       final pitch = math.atan2(-event.y, math.sqrt(event.x * event.x + event.z * event.z));
       setState(() {
-        _roll = roll;
-        _pitch = pitch.clamp(-math.pi / 3, math.pi / 3);
+        _roll = _roll * .86 + roll * .14;
+        _pitch = _pitch * .86 + pitch.clamp(-math.pi / 3, math.pi / 3) * .14;
       });
     });
   }
 
+  Future<void> _openCamera() async {
+    try {
+      final cams = await availableCameras();
+      final back = cams.where((x) => x.lensDirection == CameraLensDirection.back);
+      final selected = back.isNotEmpty ? back.first : cams.first;
+      final controller = CameraController(selected, ResolutionPreset.high, enableAudio: false);
+      await controller.initialize();
+      if (!mounted) { await controller.dispose(); return; }
+      setState(() => _camera = controller);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('الكاميرا: ' + e.toString())));
+    }
+  }
+
+  void _zero() => setState(() {
+    _pitchZero = _pitch; _rollZero = _roll; _pitchTrim = 0; _rollTrim = 0;
+  });
+
+  Future<void> _toggleRecord() async {
+    final c = _camera;
+    if (c == null || !c.value.isInitialized) return;
+    try {
+      if (_recording) { await c.stopVideoRecording(); } else { await c.startVideoRecording(); }
+      if (mounted) setState(() => _recording = !_recording);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('التسجيل: ' + e.toString())));
+    }
+  }
+
+  @override
+  void dispose() {
+    _imu?.cancel();
+    _camera?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pitch = _pitch - _pitchZero + _pitchTrim * math.pi / 180;
+    final roll = _roll - _rollZero + _rollTrim * math.pi / 180;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('EFIS'),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Center(child: Text('تجريبي', style: TextStyle(color: Colors.amber))),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, c) => CustomPaint(
-                  size: Size(c.maxWidth, c.maxHeight),
-                  painter: _PfdPainter(pitch: _pitch, roll: _roll),
-                ),
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              color: const Color(0xFF151515),
-              child: const Text(
-                'الأفق الاصطناعي يعمل بحساسات الهاتف — السرعة والارتفاع والاتجاه سنربطها ببيانات مقاتل بعد اختبار هذه الصفحة.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.white70),
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: SafeArea(child: Stack(fit: StackFit.expand, children: [
+        if (_camera?.value.isInitialized == true)
+          CameraPreview(_camera!)
+        else
+          const Center(child: CircularProgressIndicator()),
+        CustomPaint(painter: _PfdPainter(pitch: pitch, roll: roll, transparent: true)),
+        Positioned(top: 12, left: 12, child: IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back))),
+        Positioned(top: 12, right: 12, child: FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: _recording ? Colors.red : Colors.black54),
+          onPressed: _toggleRecord,
+          icon: Icon(_recording ? Icons.stop : Icons.fiber_manual_record),
+          label: Text(_recording ? 'STOP' : 'REC'),
+        )),
+        Positioned(bottom: 18, left: 14, child: _TrimKnob(label: 'PITCH', value: _pitchTrim, onChanged: (v) => setState(() => _pitchTrim = v))),
+        Positioned(bottom: 18, right: 14, child: _TrimKnob(label: 'ROLL', value: _rollTrim, onChanged: (v) => setState(() => _rollTrim = v))),
+        Positioned(bottom: 25, left: 0, right: 0, child: Center(child: FilledButton.tonalIcon(
+          onPressed: _zero, icon: const Icon(Icons.center_focus_strong), label: const Text('ZERO'),
+        ))),
+      ])),
     );
   }
+
+}
+
+class _TrimKnob extends StatelessWidget {
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  const _TrimKnob({required this.label, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onVerticalDragUpdate: (d) => onChanged((value - d.delta.dy * .12).clamp(-15.0, 15.0)),
+    onDoubleTap: () => onChanged(0),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(width: 62, height: 62, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.black54, border: Border.all(color: Colors.greenAccent, width: 2)),
+        child: Transform.rotate(angle: value * math.pi / 30, child: const Icon(Icons.expand_less, color: Colors.greenAccent, size: 30))),
+      const SizedBox(height: 3),
+      Text(label + '  ' + value.toStringAsFixed(1) + '°', style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+    ]),
+  );
 }
 
 class _PfdPainter extends CustomPainter {
   final double pitch;
   final double roll;
-  _PfdPainter({required this.pitch, required this.roll});
+  final bool transparent;
+  _PfdPainter({required this.pitch, required this.roll, this.transparent = false});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -85,25 +137,25 @@ class _PfdPainter extends CustomPainter {
     canvas.rotate(-roll);
 
     final pitchPx = pitch * size.height / 1.15;
-    final sky = Paint()..color = const Color(0xFF1676B8);
-    final ground = Paint()..color = const Color(0xFF7A482A);
+    final sky = Paint()..color = transparent ? Colors.transparent : const Color(0xFF1676B8);
+    final ground = Paint()..color = transparent ? Colors.transparent : const Color(0xFF7A482A);
     final horizon = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3;
+      ..color = transparent ? Colors.greenAccent : Colors.white
+      ..strokeWidth = 2;
 
     canvas.drawRect(Rect.fromLTRB(-size.width, -size.height * 2 + pitchPx, size.width, pitchPx), sky);
     canvas.drawRect(Rect.fromLTRB(-size.width, pitchPx, size.width, size.height * 2 + pitchPx), ground);
     canvas.drawLine(Offset(-size.width, pitchPx), Offset(size.width, pitchPx), horizon);
 
     final thin = Paint()
-      ..color = Colors.white70
+      ..color = transparent ? Colors.greenAccent : Colors.white70
       ..strokeWidth = 1.5;
     final text = TextPainter(textDirection: TextDirection.ltr);
     for (int deg = -30; deg <= 30; deg += 10) {
       if (deg == 0) continue;
       final y = pitchPx - deg * size.height / 90;
       canvas.drawLine(Offset(-45, y), Offset(45, y), thin);
-      text.text = TextSpan(text: deg.abs().toString(), style: const TextStyle(color: Colors.white, fontSize: 12));
+      text.text = TextSpan(text: deg.abs().toString(), style: TextStyle(color: transparent ? Colors.greenAccent : Colors.white, fontSize: 12));
       text.layout();
       text.paint(canvas, Offset(52, y - text.height / 2));
       text.paint(canvas, Offset(-52 - text.width, y - text.height / 2));
@@ -111,7 +163,7 @@ class _PfdPainter extends CustomPainter {
     canvas.restore();
 
     final fixed = Paint()
-      ..color = Colors.amber
+      ..color = transparent ? Colors.greenAccent : Colors.amber
       ..strokeWidth = 4
       ..style = PaintingStyle.stroke;
     canvas.drawLine(Offset(center.dx - 65, center.dy), Offset(center.dx - 15, center.dy), fixed);
@@ -119,7 +171,7 @@ class _PfdPainter extends CustomPainter {
     canvas.drawLine(Offset(center.dx, center.dy - 8), Offset(center.dx, center.dy + 12), fixed);
 
     final border = Paint()
-      ..color = Colors.white70
+      ..color = transparent ? Colors.greenAccent : Colors.white70
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
     final r = math.min(size.width * .28, 115.0);
