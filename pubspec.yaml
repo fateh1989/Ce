@@ -86,6 +86,7 @@ dependencies:
   flutter_blue_plus: ^2.0.2
   webview_flutter: ^4.8.0
   sensors_plus: ^7.0.0
+  camera: any
   wheel_picker: ^0.2.1
   easy_localization: ^3.0.7+1
   path: ^1.9.1
